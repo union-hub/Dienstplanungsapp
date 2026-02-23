@@ -1,20 +1,19 @@
 {
-  "name": "dienstplan-backend",
+  "name": "dienstplanungsapp-backend",
   "version": "1.0.0",
-  "description": "Backend für Dienstplanungs-Applikation (Eingliederungshilfe)",
-  "main": "src/index.js",
+  "description": "Backend für Dienstplanungsapp",
+  "main": "server.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "seed": "node src/seed.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "seed": "node src/db/seed.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^9.4.3",
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "jsonwebtoken": "^9.0.2",
-    "pdfkit": "^0.15.0"
+    "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.3"

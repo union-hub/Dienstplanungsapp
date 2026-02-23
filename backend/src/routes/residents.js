@@ -1,88 +1,51 @@
-const express = require('express');
-const { getDb } = require('../database');
+const router = require('express').Router();
+const db = require('../db/database');
 const { authenticate, requireRole } = require('../middleware/auth');
-const router = express.Router();
 
-// GET alle Bewohner*innen
-router.get('/', authenticate, (req, res) => {
-  const db = getDb();
-  const rows = db.prepare(`
-    SELECT b.*, wb.name as wohnbereich_name
-    FROM bewohner b
-    LEFT JOIN wohnbereiche wb ON b.wohnbereich_id = wb.id
-    WHERE b.aktiv = 1
-    ORDER BY b.nachname, b.vorname
-  `).all();
-  res.json(rows);
+router.use(authenticate);
+
+router.get('/', (req, res) => {
+  const residents = db.prepare(`
+    SELECT r.*,
+      (SELECT GROUP_CONCAT(rr.employee_id || ':' || rr.restriction_type, '|')
+       FROM resident_restrictions rr WHERE rr.resident_id = r.id) as restrictions_raw
+    FROM residents r WHERE r.active = 1 ORDER BY r.last_name`).all();
+  res.json(residents);
 });
 
-// GET Restriktionen eines Bewohners
-router.get('/:id/restriktionen', authenticate, requireRole('leitung', 'teamleitung'), (req, res) => {
-  const db = getDb();
-  const rows = db.prepare(`
-    SELECT er.*, m.vorname || ' ' || m.nachname as ma_name, m.kuerzel
-    FROM einsatzrestriktionen er
-    JOIN mitarbeitende m ON er.mitarbeitende_id = m.id
-    WHERE er.bewohner_id = ?
-  `).all(req.params.id);
-  res.json(rows);
+router.get('/:id', (req, res) => {
+  const resident = db.prepare('SELECT * FROM residents WHERE id = ?').get(req.params.id);
+  if (!resident) return res.status(404).json({ error: 'Nicht gefunden' });
+  const restrictions = db.prepare('SELECT * FROM resident_restrictions WHERE resident_id = ?').all(req.params.id);
+  res.json({ ...resident, restrictions });
 });
 
-// POST Bewohner anlegen
-router.post('/', authenticate, requireRole('leitung', 'teamleitung'), (req, res) => {
-  const db = getDb();
-  const { vorname, nachname, kuerzel, wohnbereich_id, unterstuetzungsbedarf,
-          benoetigt_eins_zu_eins, nachtaufsicht_erforderlich } = req.body;
-
-  const result = db.prepare(`
-    INSERT INTO bewohner (vorname, nachname, kuerzel, wohnbereich_id, unterstuetzungsbedarf,
-                          benoetigt_eins_zu_eins, nachtaufsicht_erforderlich)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(vorname, nachname, kuerzel, wohnbereich_id, unterstuetzungsbedarf || '',
-         benoetigt_eins_zu_eins ? 1 : 0, nachtaufsicht_erforderlich ? 1 : 0);
-
-  res.status(201).json({ id: result.lastInsertRowid, ...req.body });
+router.post('/', requireRole('leitung', 'teamleitung'), (req, res) => {
+  const { first_name, last_name, short_code, support_level, needs_1to1, needs_night_supervision, notes } = req.body;
+  if (!first_name || !last_name || !short_code) return res.status(400).json({ error: 'Pflichtfelder fehlen' });
+  const r = db.prepare(`INSERT INTO residents (first_name, last_name, short_code, support_level, needs_1to1, needs_night_supervision, notes) VALUES (?,?,?,?,?,?,?)`)
+    .run(first_name, last_name, short_code, support_level || 1, needs_1to1 ? 1 : 0, needs_night_supervision ? 1 : 0, notes || '');
+  res.status(201).json({ id: r.lastInsertRowid });
 });
 
-// PUT Bewohner aktualisieren
-router.put('/:id', authenticate, requireRole('leitung', 'teamleitung'), (req, res) => {
-  const db = getDb();
-  const { vorname, nachname, kuerzel, wohnbereich_id, unterstuetzungsbedarf,
-          benoetigt_eins_zu_eins, nachtaufsicht_erforderlich } = req.body;
-
-  db.prepare(`
-    UPDATE bewohner SET vorname=?, nachname=?, kuerzel=?, wohnbereich_id=?,
-    unterstuetzungsbedarf=?, benoetigt_eins_zu_eins=?, nachtaufsicht_erforderlich=?
-    WHERE id=?
-  `).run(vorname, nachname, kuerzel, wohnbereich_id, unterstuetzungsbedarf,
-         benoetigt_eins_zu_eins ? 1 : 0, nachtaufsicht_erforderlich ? 1 : 0, req.params.id);
-
-  res.json({ success: true });
+router.put('/:id', requireRole('leitung', 'teamleitung'), (req, res) => {
+  const { first_name, last_name, short_code, support_level, needs_1to1, needs_night_supervision, notes } = req.body;
+  db.prepare(`UPDATE residents SET first_name=?,last_name=?,short_code=?,support_level=?,needs_1to1=?,needs_night_supervision=?,notes=? WHERE id=?`)
+    .run(first_name, last_name, short_code, support_level, needs_1to1 ? 1 : 0, needs_night_supervision ? 1 : 0, notes, req.params.id);
+  res.json({ message: 'Aktualisiert' });
 });
 
-// POST Einsatzrestriktion hinzufügen
-router.post('/:id/restriktionen', authenticate, requireRole('leitung', 'teamleitung'), (req, res) => {
-  const db = getDb();
-  const { mitarbeitende_id, typ, grund } = req.body;
-  const result = db.prepare(`
-    INSERT INTO einsatzrestriktionen (bewohner_id, mitarbeitende_id, typ, grund)
-    VALUES (?, ?, ?, ?)
-  `).run(req.params.id, mitarbeitende_id, typ, grund || '');
-  res.status(201).json({ id: result.lastInsertRowid });
+router.post('/:id/restrictions', requireRole('leitung', 'teamleitung'), (req, res) => {
+  const { employee_id, restriction_type, reason } = req.body;
+  db.prepare('INSERT OR REPLACE INTO resident_restrictions (resident_id, employee_id, restriction_type, reason) VALUES (?,?,?,?)')
+    .run(req.params.id, employee_id, restriction_type, reason || '');
+  res.status(201).json({ message: 'Restriktion gespeichert' });
 });
 
-// DELETE Einsatzrestriktion
-router.delete('/:id/restriktionen/:rid', authenticate, requireRole('leitung', 'teamleitung'), (req, res) => {
-  const db = getDb();
-  db.prepare('DELETE FROM einsatzrestriktionen WHERE id = ?').run(req.params.rid);
-  res.json({ success: true });
-});
-
-// DELETE Bewohner (soft delete)
-router.delete('/:id', authenticate, requireRole('leitung'), (req, res) => {
-  const db = getDb();
-  db.prepare('UPDATE bewohner SET aktiv = 0 WHERE id = ?').run(req.params.id);
-  res.json({ success: true });
+router.delete('/:id/restrictions/:empId', requireRole('leitung', 'teamleitung'), (req, res) => {
+  db.prepare('DELETE FROM resident_restrictions WHERE resident_id = ? AND employee_id = ?')
+    .run(req.params.id, req.params.empId);
+  res.json({ message: 'Restriktion entfernt' });
 });
 
 module.exports = router;

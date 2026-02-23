@@ -1,48 +1,32 @@
-const express = require('express');
+const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { getDb } = require('../database');
-const { JWT_SECRET } = require('../middleware/auth');
+const db = require('../db/database');
+const { authenticate, JWT_SECRET } = require('../middleware/auth');
 
-const router = express.Router();
-
-// POST /api/auth/login
 router.post('/login', (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'E-Mail und Passwort erforderlich' });
 
-  const db = getDb();
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-  if (!user) return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
+  if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    return res.status(401).json({ error: 'Ungültige Zugangsdaten' });
+  }
 
-  const valid = bcrypt.compareSync(password, user.password_hash);
-  if (!valid) return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
-
-  const mitarbeitende = db.prepare('SELECT * FROM mitarbeitende WHERE user_id = ?').get(user.id);
-
+  const employee = db.prepare('SELECT * FROM employees WHERE user_id = ?').get(user.id);
   const token = jwt.sign(
-    { id: user.id, email: user.email, role: user.role, mitarbeitende_id: mitarbeitende?.id },
+    { userId: user.id, role: user.role, employeeId: employee?.id, email: user.email },
     JWT_SECRET,
     { expiresIn: '8h' }
   );
 
-  res.json({ token, user: { id: user.id, email: user.email, role: user.role, mitarbeitende } });
+  res.json({ token, user: { id: user.id, email: user.email, role: user.role, employee } });
 });
 
-// POST /api/auth/register (nur Leitung)
-router.post('/register', require('../middleware/auth').authenticate, require('../middleware/auth').requireRole('leitung'), (req, res) => {
-  const { email, password, role } = req.body;
-  if (!email || !password || !role) return res.status(400).json({ error: 'Fehlende Felder' });
-
-  const db = getDb();
-  const hash = bcrypt.hashSync(password, 10);
-  try {
-    const result = db.prepare('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)').run(email, hash, role);
-    res.json({ id: result.lastInsertRowid, email, role });
-  } catch (e) {
-    if (e.message.includes('UNIQUE')) return res.status(409).json({ error: 'E-Mail bereits vergeben' });
-    throw e;
-  }
+router.get('/me', authenticate, (req, res) => {
+  const user = db.prepare('SELECT id, email, role, created_at FROM users WHERE id = ?').get(req.user.userId);
+  const employee = db.prepare('SELECT * FROM employees WHERE user_id = ?').get(req.user.userId);
+  res.json({ ...user, employee });
 });
 
 module.exports = router;
