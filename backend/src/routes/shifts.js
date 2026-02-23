@@ -17,18 +17,22 @@ router.get('/schedule/:scheduleId', (req, res) => {
 });
 
 router.post('/', requireRole('leitung','teamleitung'), (req, res) => {
-  const { schedule_id, date, shift_type, start_time, end_time, min_staff, min_fachkraft, label } = req.body;
-  if (!schedule_id||!date||!shift_type||!start_time||!end_time) return res.status(400).json({ error: 'Pflichtfelder fehlen' });
-  const r = db.prepare('INSERT INTO shifts (schedule_id,date,shift_type,start_time,end_time,min_staff,min_fachkraft,label) VALUES (?,?,?,?,?,?,?,?)')
-    .run(schedule_id, date, shift_type, start_time, end_time, min_staff||1, min_fachkraft||1, label||'');
+  const { schedule_id, date, shift_type, start_time, end_time, break_minutes, min_staff, min_fachkraft, label } = req.body;
+  if (!schedule_id||!date||!shift_type||!start_time||!end_time)
+    return res.status(400).json({ error: 'Pflichtfelder fehlen' });
+  const r = db.prepare(
+    'INSERT INTO shifts (schedule_id,date,shift_type,start_time,end_time,break_minutes,min_staff,min_fachkraft,label) VALUES (?,?,?,?,?,?,?,?,?)'
+  ).run(schedule_id, date, shift_type, start_time, end_time, break_minutes||0, min_staff||1, min_fachkraft||1, label||'');
   const shift = db.prepare('SELECT * FROM shifts WHERE id=?').get(r.lastInsertRowid);
+  db.prepare('INSERT INTO schedule_history (schedule_id,changed_by,action,details) VALUES (?,?,?,?)')
+    .run(schedule_id, req.user.userId, 'shift_created', JSON.stringify({ date, shift_type, label, start_time, end_time }));
   res.status(201).json({ id: r.lastInsertRowid, violations: validateShift(shift) });
 });
 
 router.put('/:id', requireRole('leitung','teamleitung'), (req, res) => {
-  const { shift_type, start_time, end_time, min_staff, min_fachkraft, label } = req.body;
-  db.prepare('UPDATE shifts SET shift_type=?,start_time=?,end_time=?,min_staff=?,min_fachkraft=?,label=? WHERE id=?')
-    .run(shift_type, start_time, end_time, min_staff, min_fachkraft, label, req.params.id);
+  const { shift_type, start_time, end_time, break_minutes, min_staff, min_fachkraft, label } = req.body;
+  db.prepare('UPDATE shifts SET shift_type=?,start_time=?,end_time=?,break_minutes=?,min_staff=?,min_fachkraft=?,label=? WHERE id=?')
+    .run(shift_type, start_time, end_time, break_minutes||0, min_staff, min_fachkraft, label, req.params.id);
   const shift = db.prepare('SELECT * FROM shifts WHERE id=?').get(req.params.id);
   res.json({ message:'Aktualisiert', violations: validateShift(shift) });
 });

@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS shifts (
   shift_type TEXT NOT NULL CHECK(shift_type IN ('frueh','spaet','nacht','bereitschaft','rufbereitschaft')),
   start_time TEXT NOT NULL,
   end_time TEXT NOT NULL,
+  break_minutes INTEGER NOT NULL DEFAULT 0,
   min_staff INTEGER NOT NULL DEFAULT 1,
   min_fachkraft INTEGER NOT NULL DEFAULT 1,
   label TEXT,
