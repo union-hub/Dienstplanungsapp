@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const navItems = [
@@ -10,25 +10,22 @@ const navItems = [
   { path: '/controlling',    label: 'Auswertungen',   icon: '📊', roles: ['leitung','teamleitung'] },
 ];
 
-export default function Layout({ children }) {
+export default function Layout() {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
 
   const filtered = navItems.filter(n => n.roles.includes(user?.role));
-
   const roleLabel = { leitung: 'Leitung', teamleitung: 'Teamleitung', mitarbeitende: 'Mitarbeitende' };
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
       {/* ─── Sidebar ─── */}
       <aside className="w-56 shrink-0 bg-slate-900 flex flex-col">
-        {/* Logo */}
         <div className="px-5 py-5 border-b border-slate-700">
           <div className="text-white font-bold text-lg leading-tight">Dienstplan</div>
           <div className="text-slate-400 text-xs mt-0.5">Einrichtung Besondere Wohnform</div>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {filtered.map(n => (
             <Link key={n.path} to={n.path}
@@ -43,7 +40,6 @@ export default function Layout({ children }) {
           ))}
         </nav>
 
-        {/* User info */}
         <div className="px-4 py-4 border-t border-slate-700">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
@@ -64,9 +60,9 @@ export default function Layout({ children }) {
         </div>
       </aside>
 
-      {/* ─── Content ─── */}
+      {/* ─── Content via React Router Outlet ─── */}
       <main className="flex-1 overflow-hidden flex flex-col">
-        {children}
+        <Outlet />
       </main>
     </div>
   );
