@@ -20,12 +20,15 @@
     @apply w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow;
   }
   .btn-primary {
-    @apply flex items-center gap-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold px-4 py-2 rounded-xl transition-colors text-sm;
+    @apply inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold px-4 py-2 rounded-xl transition-colors text-sm cursor-pointer;
   }
   .btn-secondary {
-    @apply flex items-center gap-2 border border-gray-300 hover:bg-gray-50 active:bg-gray-100 text-gray-700 font-medium px-4 py-2 rounded-xl transition-colors text-sm;
+    @apply inline-flex items-center gap-2 border border-gray-300 hover:bg-gray-50 active:bg-gray-100 text-gray-700 font-medium px-4 py-2 rounded-xl transition-colors text-sm cursor-pointer;
   }
   .btn-sm { @apply px-3 py-1.5 text-xs; }
+  .card {
+    @apply bg-white rounded-2xl border border-gray-200 shadow-sm p-6;
+  }
 }
 
 @media print {
@@ -35,7 +38,6 @@
 }
 .print-only { display: none; }
 
-/* Smooth modal animation */
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes zoom-in-95 { from { transform: scale(0.95); } to { transform: scale(1); } }
 .animate-in { animation-duration: 150ms; animation-fill-mode: both; }
