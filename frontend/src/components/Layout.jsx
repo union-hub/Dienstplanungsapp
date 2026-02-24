@@ -1,62 +1,72 @@
-import React from 'react';
-import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const navItems = [
-  { path: '/', label: 'Dashboard', icon: '🏠', roles: ['leitung','teamleitung','mitarbeitende'] },
-  { path: '/employees', label: 'Mitarbeitende', icon: '👥', roles: ['leitung','teamleitung'] },
-  { path: '/residents', label: 'Bewohner*innen', icon: '👤', roles: ['leitung','teamleitung'] },
-  { path: '/qualifications', label: 'Qualifikationen', icon: '🎓', roles: ['leitung'] },
-  { path: '/my-shifts', label: 'Meine Dienste', icon: '📅', roles: ['mitarbeitende'] },
-  { path: '/controlling', label: 'Controlling', icon: '📊', roles: ['leitung','teamleitung'] },
+  { path: '/',               label: 'Dienstpläne',    icon: '📅', roles: ['leitung','teamleitung','mitarbeitende'] },
+  { path: '/employees',      label: 'Mitarbeitende',  icon: '👥', roles: ['leitung','teamleitung'] },
+  { path: '/residents',      label: 'Bewohner*innen', icon: '🏠', roles: ['leitung','teamleitung'] },
+  { path: '/qualifications', label: 'Qualifikationen',icon: '🎓', roles: ['leitung'] },
+  { path: '/my-shifts',      label: 'Meine Dienste',  icon: '🗓', roles: ['mitarbeitende'] },
+  { path: '/controlling',    label: 'Auswertungen',   icon: '📊', roles: ['leitung','teamleitung'] },
 ];
 
-export default function Layout() {
+export default function Layout({ children }) {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const { pathname } = useLocation();
 
-  const handleLogout = () => { logout(); navigate('/login'); };
+  const filtered = navItems.filter(n => n.roles.includes(user?.role));
 
-  const filteredNav = navItems.filter(n => n.roles.includes(user?.role));
+  const roleLabel = { leitung: 'Leitung', teamleitung: 'Teamleitung', mitarbeitende: 'Mitarbeitende' };
 
   return (
-    <div className="min-h-screen flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-gray-900 text-white flex flex-col no-print">
-        <div className="p-6 border-b border-gray-700">
-          <h1 className="text-lg font-bold">📋 Dienstplan</h1>
-          <p className="text-xs text-gray-400 mt-1">Besondere Wohnform</p>
+    <div className="flex h-screen overflow-hidden bg-gray-50">
+      {/* ─── Sidebar ─── */}
+      <aside className="w-56 shrink-0 bg-slate-900 flex flex-col">
+        {/* Logo */}
+        <div className="px-5 py-5 border-b border-slate-700">
+          <div className="text-white font-bold text-lg leading-tight">Dienstplan</div>
+          <div className="text-slate-400 text-xs mt-0.5">Einrichtung Besondere Wohnform</div>
         </div>
-        <nav className="flex-1 p-4 space-y-1">
-          {filteredNav.map(item => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                location.pathname === item.path
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-              }`}
-            >
-              <span>{item.icon}</span>
-              {item.label}
+
+        {/* Nav */}
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          {filtered.map(n => (
+            <Link key={n.path} to={n.path}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                pathname === n.path || (n.path !== '/' && pathname.startsWith(n.path))
+                  ? 'bg-blue-600 text-white shadow'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}>
+              <span className="text-base">{n.icon}</span>
+              {n.label}
             </Link>
           ))}
         </nav>
-        <div className="p-4 border-t border-gray-700">
-          <div className="text-xs text-gray-400 mb-2">
-            {user?.email}
-            <span className="ml-2 bg-gray-700 px-2 py-0.5 rounded text-gray-300">{user?.role}</span>
+
+        {/* User info */}
+        <div className="px-4 py-4 border-t border-slate-700">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+              {user?.email?.[0]?.toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <div className="text-white text-xs font-medium truncate">{user?.email}</div>
+              <div className="text-slate-400 text-xs">{roleLabel[user?.role]}</div>
+            </div>
           </div>
-          <button onClick={handleLogout} className="btn btn-secondary btn-sm w-full">
+          <button onClick={logout}
+            className="w-full text-slate-400 hover:text-white text-xs text-left px-2 py-1.5 rounded hover:bg-slate-800 transition-colors flex items-center gap-2">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
             Abmelden
           </button>
         </div>
       </aside>
-      {/* Main */}
-      <main className="flex-1 overflow-auto">
-        <Outlet />
+
+      {/* ─── Content ─── */}
+      <main className="flex-1 overflow-hidden flex flex-col">
+        {children}
       </main>
     </div>
   );
