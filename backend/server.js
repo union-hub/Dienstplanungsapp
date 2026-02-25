@@ -1,42 +1,54 @@
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
+
 const express = require('express');
-const cors = require('cors');
+const cors    = require('cors');
 const { initDb } = require('./src/db/database');
 
-const app = express();
+const app  = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173', credentials: true }));
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
+  .split(',').map(s => s.trim());
+
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error('CORS: Origin nicht erlaubt'));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 
-// Datenbank asynchron initialisieren, dann Routes laden
 initDb().then(() => {
-  const authRoutes = require('./src/routes/auth');
-  const employeeRoutes = require('./src/routes/employees');
-  const residentRoutes = require('./src/routes/residents');
-  const qualificationRoutes = require('./src/routes/qualifications');
-  const shiftRoutes = require('./src/routes/shifts');
-  const assignmentRoutes = require('./src/routes/assignments');
-  const scheduleRoutes = require('./src/routes/schedules');
-  const controllingRoutes = require('./src/routes/controlling');
+  app.use('/api/auth',           require('./src/routes/auth'));
+  app.use('/api/users',          require('./src/routes/users'));
+  app.use('/api/employees',      require('./src/routes/employees'));
+  app.use('/api/residents',      require('./src/routes/residents'));
+  app.use('/api/qualifications', require('./src/routes/qualifications'));
+  app.use('/api/shifts',         require('./src/routes/shifts'));
+  app.use('/api/assignments',    require('./src/routes/assignments'));
+  app.use('/api/schedules',      require('./src/routes/schedules'));
+  app.use('/api/controlling',    require('./src/routes/controlling'));
 
-  app.use('/api/auth', authRoutes);
-  app.use('/api/employees', employeeRoutes);
-  app.use('/api/residents', residentRoutes);
-  app.use('/api/qualifications', qualificationRoutes);
-  app.use('/api/shifts', shiftRoutes);
-  app.use('/api/assignments', assignmentRoutes);
-  app.use('/api/schedules', scheduleRoutes);
-  app.use('/api/controlling', controllingRoutes);
+  app.get('/api/health', (_req, res) =>
+    res.json({ status: 'ok', timestamp: new Date().toISOString(), version: '1.0.0' }));
 
-  app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
-
-  // Error handler
   app.use((err, _req, res, _next) => {
     console.error(err.stack);
     res.status(err.status || 500).json({ error: err.message || 'Interner Serverfehler' });
   });
 
-  app.listen(PORT, () => console.log(`✅ Backend läuft auf Port ${PORT}`));
+  app.listen(PORT, () => {
+    console.log(`✅ Backend läuft auf Port ${PORT}`);
+    console.log(`   JWT_SECRET: ${process.env.JWT_SECRET &&
+      process.env.JWT_SECRET !== 'BITTE_AENDERN_min32zeichen_zufaellig_abc123'
+      ? '✓ gesetzt' : '⚠ NICHT GESETZT oder Standardwert – bitte .env anlegen!'}`);
+  });
+
+  const { runBackup } = require('./src/backup');
+  const H24 = 24 * 60 * 60 * 1000;
+  setTimeout(() => { runBackup(); setInterval(runBackup, H24); }, 5000);
+
 }).catch(err => {
   console.error('❌ Datenbankinitialisierung fehlgeschlagen:', err);
   process.exit(1);
