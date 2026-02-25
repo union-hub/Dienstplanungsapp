@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
-import { format, parseISO, addDays } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { de } from 'date-fns/locale';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -35,11 +35,18 @@ function fmtH(h) {
   return min ? `${hrs}h${min}` : `${hrs}h`;
 }
 
-// Bug 1 fix: date-fns parseISO gibt bei reinen Datumsstrings (ohne Zeit) UTC-Mitternacht zurück.
-// .toISOString().split('T')[0] würde in UTC+1 einen Tag zu früh liefern.
-// Lösung: format(d, 'yyyy-MM-dd') verwendet die lokale Zeitzone.
-function toLocalDateStr(d) {
-  return format(d, 'yyyy-MM-dd');
+/**
+ * Bug 1 – ROOT FIX:
+ * parseISO('2026-02-23') liefert UTC-Mitternacht (00:00Z).
+ * In UTC+1 ist das 22.02. 23:00 Uhr lokal → alle format()-Aufrufe
+ * zeigen einen Tag zu früh an.
+ *
+ * Lösung: Datum immer als lokalen Mittag parsen ('T12:00:00').
+ * Dann ist man 12 h von jeder DST-Grenze entfernt und timezone-sicher.
+ */
+function localNoon(dateStr) {
+  // dateStr z.B. '2026-02-23'
+  return new Date(dateStr + 'T12:00:00');
 }
 
 // ─── Hauptkomponente ────────────────────────────────────────────────────────────
@@ -77,16 +84,16 @@ export default function Schedule() {
 
   useEffect(() => { load(); }, [load]);
 
-  // ── Wochentage (Bug 1 fix: toLocalDateStr statt .toISOString().split('T')[0]) ──
-  const todayStr = toLocalDateStr(new Date());
+  // ── Wochentage – Bug1 fix: localNoon() statt parseISO() ──
+  const todayStr = format(new Date(), 'yyyy-MM-dd'); // lokales Datum heute
   const days = schedule ? Array.from({ length: 7 }, (_, i) => {
-    const d = addDays(parseISO(schedule.week_start), i);
+    const d = addDays(localNoon(schedule.week_start), i); // lokaler Mittag + n Tage
     return {
-      date:       toLocalDateStr(d),   // ← fix
-      shortDay:   format(d, 'EEE', { locale: de }),
+      date:       format(d, 'yyyy-MM-dd'),          // lokales Datum als Key
+      shortDay:   format(d, 'EEE', { locale: de }), // lokaler Wochentag
       dayNum:     format(d, 'dd'),
       monthShort: format(d, 'MMM', { locale: de }),
-      isToday:    toLocalDateStr(d) === todayStr,   // ← fix
+      isToday:    format(d, 'yyyy-MM-dd') === todayStr,
     };
   }) : [];
 
@@ -207,12 +214,10 @@ export default function Schedule() {
     await load();
   };
 
-  // Bug 4 fix: Warnung bei leerem Plan vor Veröffentlichung
+  // Bug 4 fix: Warnung bei leerem Plan
   const handlePublish = async () => {
     if (shifts.length === 0) {
-      const ok = confirm(
-        'Dieser Dienstplan enthält noch keine Dienste.\n\nTrotzdem veröffentlichen?'
-      );
+      const ok = confirm('Dieser Dienstplan enthält noch keine Dienste.\n\nTrotzdem veröffentlichen?');
       if (!ok) return;
     }
     try {
@@ -501,12 +506,13 @@ export default function Schedule() {
                 <h3 className="font-bold text-gray-900">
                   {modal.mode === 'create' ? 'Dienst anlegen' : 'Dienst bearbeiten'}
                 </h3>
+                {/* Bug 1 fix: localNoon() statt parseISO() für korrekte Datumsanzeige im Modal */}
                 <p className="text-xs text-gray-500 mt-0.5">
                   {modal.mode === 'create' && modal.date &&
-                    format(parseISO(modal.date), 'EEEE, dd. MMMM yyyy', { locale: de })}
+                    format(localNoon(modal.date), 'EEEE, dd. MMMM yyyy', { locale: de })}
                   {modal.employee && ` · ${modal.employee.first_name} ${modal.employee.last_name}`}
                   {modal.mode === 'edit' && modal.shift &&
-                    format(parseISO(modal.shift.date), 'EEEE, dd. MMMM yyyy', { locale: de })}
+                    format(localNoon(modal.shift.date), 'EEEE, dd. MMMM yyyy', { locale: de })}
                 </p>
               </div>
               <button onClick={() => setModal(null)}
