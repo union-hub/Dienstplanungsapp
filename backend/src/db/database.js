@@ -10,13 +10,36 @@ const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../../../data/diens
 const dataDir = path.dirname(DB_PATH);
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
-// sql.js ist async beim Init, wir laden synchron über initSqlJsSync
 let _db = null;
 let _SQL = null;
 
 function getDb() {
   if (_db) return _db;
   throw new Error('Datenbank nicht initialisiert. Warte auf initDb().');
+}
+
+// Führt fehlende Spalten-Migrationen durch (ALTER TABLE ADD COLUMN falls nicht vorhanden)
+function runMigrations() {
+  const migrations = [
+    { table: 'users',     column: 'active',         def: 'INTEGER NOT NULL DEFAULT 1' },
+    { table: 'shifts',    column: 'break_minutes',   def: 'INTEGER NOT NULL DEFAULT 0' },
+    { table: 'employees', column: 'can_do_nightshift_alone', def: 'INTEGER NOT NULL DEFAULT 1' },
+  ];
+
+  for (const { table, column, def } of migrations) {
+    try {
+      const cols = _db.exec(`PRAGMA table_info(${table})`);
+      if (!cols.length || !cols[0].values) continue;
+      const exists = cols[0].values.some(row => row[1] === column);
+      if (!exists) {
+        _db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${def};`);
+        console.log(`✅ Migration: ${table}.${column} hinzugefügt`);
+        persist();
+      }
+    } catch (e) {
+      console.warn(`Migration ${table}.${column} übersprungen:`, e.message);
+    }
+  }
 }
 
 async function initDb() {
@@ -29,20 +52,15 @@ async function initDb() {
     _db = new _SQL.Database();
   }
   _db.run('PRAGMA foreign_keys = ON;');
+  runMigrations();
   return _db;
 }
 
-// Persistiert die DB nach jeder Schreiboperation
 function persist() {
   const data = _db.export();
   fs.writeFileSync(DB_PATH, Buffer.from(data));
 }
 
-/**
- * Wrapper-Objekt mit better-sqlite3-kompatibler API.
- * Unterstuetzt: db.prepare(sql).run(...), .get(...), .all(...)
- * Sowie: db.exec(sql), db.transaction(fn)
- */
 const db = {
   prepare(sql) {
     return {
@@ -82,7 +100,6 @@ const db = {
   },
 
   pragma(str) {
-    // handled at init
     try { getDb().run(`PRAGMA ${str};`); } catch {}
   },
 
