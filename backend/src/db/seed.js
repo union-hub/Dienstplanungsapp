@@ -102,7 +102,7 @@ async function run() {
   console.log('   leitung@demo.de      / demo1234');
   console.log('   teamleitung@demo.de  / demo1234');
   console.log('   ma1@demo.de          / demo1234');
-  process.exit(0);
+  
 }
 
 function getWeekNumber(d) {
