@@ -33,7 +33,8 @@ initDb().then(async () => {
     }
   } catch(e) {
     console.log('🌱 Tabellen fehlen – Starte Auto-Seed...', e.message);
-    await require('./src/db/seed');
+    const { run: seedRun } = require('./src/db/seed');
+await seedRun();
   }
 
   app.use('/api/auth',           require('./src/routes/auth'));
