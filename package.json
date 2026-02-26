@@ -2,7 +2,7 @@
   "name": "dienstplanungsapp",
   "version": "1.0.0",
   "scripts": {
-    "build": "cd frontend && npm install && npm run build",
+    "build": "npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend",
     "start": "node backend/server.js"
   },
   "engines": { "node": ">=20.0.0" }
