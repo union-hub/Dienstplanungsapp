@@ -2,6 +2,8 @@ require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
 const express = require('express');
 const cors    = require('cors');
+const path    = require('path');
+const fs      = require('fs');
 const { initDb } = require('./src/db/database');
 
 const app  = express();
@@ -18,30 +20,22 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
-// Frontend ausliefern
-const path = require('path');
-const fs   = require('fs');
-const distPath = path.join(__dirname, '../frontend/dist');
-if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath));
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api')) return next();
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
-}
+
 initDb().then(async () => {
-  // Auto-seed wenn keine User vorhanden
   const { db } = require('./src/db/database');
+
+  // Auto-Seed wenn Datenbank leer
   try {
     const count = db.prepare('SELECT COUNT(*) as c FROM users').get();
     if (count.c === 0) {
-      console.log('🌱 Keine User gefunden – starte Auto-Seed...');
-      require('./src/db/seed');
+      console.log('🌱 Starte Auto-Seed...');
+      await require('./src/db/seed');
     }
   } catch(e) {
-    console.log('🌱 Datenbank leer – starte Auto-Seed...');
-    require('./src/db/seed');
+    console.log('🌱 Tabellen fehlen – Starte Auto-Seed...', e.message);
+    await require('./src/db/seed');
   }
+
   app.use('/api/auth',           require('./src/routes/auth'));
   app.use('/api/users',          require('./src/routes/users'));
   app.use('/api/employees',      require('./src/routes/employees'));
@@ -55,16 +49,24 @@ initDb().then(async () => {
   app.get('/api/health', (_req, res) =>
     res.json({ status: 'ok', timestamp: new Date().toISOString(), version: '1.0.0' }));
 
+  // Frontend ausliefern
+  const distPath = path.join(__dirname, '../frontend/dist');
+  if (fs.existsSync(distPath)) {
+    app.use(express.static(distPath));
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api')) return next();
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
   app.use((err, _req, res, _next) => {
     console.error(err.stack);
     res.status(err.status || 500).json({ error: err.message || 'Interner Serverfehler' });
   });
 
   app.listen(PORT, () => {
-    console.log(`✅ Backend läuft auf Port ${PORT}`);
-    console.log(`   JWT_SECRET: ${process.env.JWT_SECRET &&
-      process.env.JWT_SECRET !== 'BITTE_AENDERN_min32zeichen_zufaellig_abc123'
-      ? '✓ gesetzt' : '⚠ NICHT GESETZT oder Standardwert – bitte .env anlegen!'}`);
+    console.log(`✅ Server läuft auf Port ${PORT}`);
+    console.log(`   JWT_SECRET: ${process.env.JWT_SECRET ? '✓ gesetzt' : '⚠ fehlt!'}`);
   });
 
   const { runBackup } = require('./src/backup');
@@ -72,7 +74,7 @@ initDb().then(async () => {
   setTimeout(() => { runBackup(); setInterval(runBackup, H24); }, 5000);
 
 }).catch(err => {
-  console.error('❌ Datenbankinitialisierung fehlgeschlagen:', err);
+  console.error('❌ Fehler:', err);
   process.exit(1);
 });
 
