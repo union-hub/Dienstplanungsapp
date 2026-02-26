@@ -29,7 +29,19 @@ if (fs.existsSync(distPath)) {
     res.sendFile(path.join(distPath, 'index.html'));
   });
 }
-initDb().then(() => {
+initDb().then(async () => {
+  // Auto-seed wenn keine User vorhanden
+  const { db } = require('./src/db/database');
+  try {
+    const count = db.prepare('SELECT COUNT(*) as c FROM users').get();
+    if (count.c === 0) {
+      console.log('🌱 Keine User gefunden – starte Auto-Seed...');
+      require('./src/db/seed');
+    }
+  } catch(e) {
+    console.log('🌱 Datenbank leer – starte Auto-Seed...');
+    require('./src/db/seed');
+  }
   app.use('/api/auth',           require('./src/routes/auth'));
   app.use('/api/users',          require('./src/routes/users'));
   app.use('/api/employees',      require('./src/routes/employees'));
