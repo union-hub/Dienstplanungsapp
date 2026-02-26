@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: dienstplanungsapp
+    runtime: node
+    buildCommand: npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend
+    startCommand: node backend/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DB_PATH
+        value: /data/dienstplan.db
+      - key: BACKUP_DIR
+        value: /data/backups
+    disk:
+      name: daten
+      mountPath: /data
+      sizeGB: 1
