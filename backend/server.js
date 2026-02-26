@@ -18,7 +18,17 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
-
+// Frontend ausliefern
+const path = require('path');
+const fs   = require('fs');
+const distPath = path.join(__dirname, '../frontend/dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
 initDb().then(() => {
   app.use('/api/auth',           require('./src/routes/auth'));
   app.use('/api/users',          require('./src/routes/users'));
