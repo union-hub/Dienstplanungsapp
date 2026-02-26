@@ -112,4 +112,7 @@ function getWeekNumber(d) {
   return Math.ceil((((d-y)/86400000)+1)/7);
 }
 
-run().catch(e => { console.error(e); process.exit(1); });
+if (require.main === module) {
+  run().catch(e => { console.error(e); process.exit(1); });
+}
+module.exports = { run };
